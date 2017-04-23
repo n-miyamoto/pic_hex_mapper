@@ -1,3 +1,5 @@
+
+
 #include <stdio.h>
 #include <string.h>
 
@@ -5,19 +7,20 @@
 #include<stdlib.h>
 #endif
 
-#define FILENAME "test.hex"
-#define BUF 		(10000)
-#define DATA_BUF 	(0xFF)
-#define MEMORY_SIZE (0xAC00)
 
-#define EMURATE_MEMORY
+#define FILENAME "test.hex" 	//File name of hex file.
+#define BUF 		(10000)	
+#define DATA_BUF 	(0xFF)		//BUF_SIZE_	
+#define MEMORY_SIZE (0xAC00)	//Memory size of PIC program memory.	
+
+#define EMURATE_MEMORY			//
 #ifdef EMURATE_MEMORY
 unsigned char program_memory[MEMORY_SIZE];
 #endif
 
 
-
-typedef struct format{
+//Defien intel hex format.
+typedef struct intel_hex_format{
 	unsigned char status_code;
 	unsigned int data_length;
 	unsigned long address_offset;
@@ -26,42 +29,67 @@ typedef struct format{
  	unsigned char check_sum;	
 } FORMAT;
 
-
+/*
+*	convert hex char to hex.
+*	
+*	@param  chr   charachter of hex (0~9,a~f,A~F)
+*	@return 	-1: failed , 0x0~0xA :converted hex value.
+*
+*	'0'~'9'  ->  0x00~0x09 
+*	'a'~'f'  ->  0x0A~0x0F
+*	'A'~'F'	 ->  0x0A~0x0F
+*/ 
 int char2hex(char chr){
 	int ret;
 	ret = chr-0x30;
+	//chr is not hex number.
 	if(ret<0){  
 		return -1;
 	}
-
-	//0~9
+	//chr is 0~9.
 	if(ret<10){ 
 		return ret;
 	}
-
-	//A~F
+	
 	ret-=0x11;
+	//chr is not hex number.
 	if(ret<0){
 		return -1;
 	}
+	//chr is A~F.
 	if(ret<6){
 		return ret+10;
 	}
 
-	//a~f
 	ret-=0x20;
+	//chr is not hex number.
 	if(ret<0){
 		return -1;
 	}
+	//chr is a~f.
 	if(ret<6){
 		return ret+10;
 	}
 }
 
+/*
+*	parse strings to hex format.
+*
+*	@param[in]  str 	strings read from .hex file.
+	@param[out] format	parsed hex format
+	@return 	0:success, -1:fail.
 
+*	e.g.) 	strings :020000040000FA
+*	 		hex format data length :0x02
+*			hex format offset address :0x0000
+*			hex format data[0]	:0x04
+*			hex format data[1] 	:0x00
+*			hex foemat check sum:0xFA
+*
+*/
 int parse_hex_format(const char *str, FORMAT *format ){
 	char hex_data[DATA_BUF+4];
-			
+	
 	//NULL check	
 	if(format == NULL ){
 		return -1;
@@ -82,9 +110,9 @@ int parse_hex_format(const char *str, FORMAT *format ){
 
 	//Read address format
 	format->address_offset= 0x1000*char2hex(str[3])+
-				0x0100*char2hex(str[4])+
-				0x0010*char2hex(str[5])+
-				0x0001*char2hex(str[6]);
+							0x0100*char2hex(str[4])+
+							0x0010*char2hex(str[5])+
+							0x0001*char2hex(str[6]);
 
 	//Read record type
 	format->record_type= 0x10*char2hex(str[7])+char2hex(str[8]);
@@ -102,26 +130,25 @@ int parse_hex_format(const char *str, FORMAT *format ){
 }
 
 
-
+/*
+* 	memory handler.
+*/
 void erase_memory(void){
 #ifdef EMURATE_MEMORY
 	memset(program_memory,0xFF,sizeof(program_memory));
 #endif 
 }	
-
 void write_memory(long address, unsigned char data){
 #ifdef EMURATE_MEMORY
 	program_memory[address]=data;
 #endif
 }
-
 unsigned char read_memory(long address){
 #ifdef EMURATE_MEMORY
 	return program_memory[address];
 #endif 
 	return 0;
 }
-
 void show_memory(void){
 #ifdef  EMURATE_MEMORY
 	int i=0;
@@ -132,16 +159,21 @@ void show_memory(void){
 #endif 
 }
 
+/*
+*	map_hex_format
+*	
+*	Read hex format and map the data to progmemory.
+*/
 void map_hex_format(const FORMAT *format){
 	int i=0;
-	long offset = format->address_offset;
+	long offset= format->address_offset;
 	for(i=0;i<format->data_length;i++){
 		write_memory(offset+i,format->data[i]);
 	}
 }
 
-#ifndef TEST
 
+#ifndef TEST
 int main(void){
 	FILE *fp;
 	char str[BUF];
@@ -170,7 +202,7 @@ int main(void){
 }
 
 #else 
-
+//Test function below.
 int check_char2hex(char chr, int answer){
 	if(answer!=char2hex(chr))return -1;
 	else return 0;
@@ -212,25 +244,27 @@ int check_parse_hex_format(const char *input , FORMAT *answer ){
 }
 
 int test_parse_hex_format(void){
+	//Test case 1
 	char test_str_1[BUF] = ":020000040000FA";
 	FORMAT ans_1 = {':',0x02,0x0000,0x04,{0x00,0x00},0xFA};
 	if(-1==check_parse_hex_format(test_str_1,&ans_1)) return -1;
 
+	//Test case 2
 	char test_str_2[BUF] = ":100000008316850186010130860083120030850049";
 	FORMAT ans_2 = {':',0x10,0x0000,0x00,{0x83,0x16,0x85,0x01,0x86,0x01,0x01,0x30,0x86,0x00,0x83,0x12,0x00,0x30,0x85,0x00},0x49};
 	if(-1==check_parse_hex_format(test_str_2,&ans_2)) return -1;
 
+	//Test case 3
 	char test_str_3[BUF] = ":00000001FF";
 	FORMAT ans_3 = {':',0x00,0x0000,0x01,{""},0xFF};
 	if(-1==check_parse_hex_format(test_str_3,&ans_3)) return -1;
 
+	//Test case 4
 	char test_str_4[BUF] = ":10000000abcd8501860101308600cdef0030850049";
 	FORMAT ans_4 = {':',0x10,0x0000,0x00,{0xab,0xcd,0x85,0x01,0x86,0x01,0x01,0x30,0x86,0x00,0xcd,0xef,0x00,0x30,0x85,0x00},0x49};
 	if(-1==check_parse_hex_format(test_str_4,&ans_4)) return -1;
 	return 0;
 }
-
-
 
 int test_memory_rw(void){
 	erase_memory();
