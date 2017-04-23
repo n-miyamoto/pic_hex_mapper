@@ -21,12 +21,12 @@ unsigned char program_memory[MEMORY_SIZE];
 
 //Defien intel hex format.
 typedef struct intel_hex_format{
-	unsigned char status_code;
-	unsigned int data_length;
-	unsigned long address_offset;
-    unsigned int record_type;
-	unsigned char data[DATA_BUF];
- 	unsigned char check_sum;	
+	unsigned char 	status_code;
+	unsigned int 	data_length;
+	unsigned long 	address_offset;
+	unsigned int 	record_type;
+	unsigned char	data[DATA_BUF];
+	unsigned char 	check_sum;	
 } FORMAT;
 
 /*
