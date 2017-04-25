@@ -8,12 +8,12 @@
 #endif
 
 
-#define FILENAME "test.hex" 	//File name of hex file.
+#define FILENAME	"test.hex" 	//File name of hex file.
 #define BUF 		(10000)	
-#define DATA_BUF 	(0xFF)		//BUF_SIZE_	
-#define MEMORY_SIZE (0xAC00)	//Memory size of PIC program memory.	
+#define DATA_BUF	(0xFF)		//BUF_SIZE_	
+#define MEMORY_SIZE	(0xAC00)	//Memory size of PIC program memory.	
 
-#define EMURATE_MEMORY			//
+#define EMURATE_MEMORY			
 #ifdef EMURATE_MEMORY
 unsigned char program_memory[MEMORY_SIZE];
 #endif
@@ -184,9 +184,9 @@ int main(void){
 		return 1;	
 	}
 
-
 	FORMAT fmt;
 	erase_memory();
+	/*
 	while(fgets(str,256,fp)!=NULL){
 		//printf("%s",str);		
 		if(-1==parse_hex_format(str,&fmt)){
@@ -196,6 +196,37 @@ int main(void){
 		//printf("datalength:%d\r\n",fmt.data_length);
 		map_hex_format(&fmt);
 	}
+	*/
+	int ret;
+	int i=0;
+
+	while(1){
+#ifdef __XC16
+		ret = FILEIO_GetChar(&file);    //read char from file.
+#elif defined unix
+		ret = fgetc(fp);
+#endif
+
+        if(ret == EOF){break;}		//Detect EOF.
+        if(ret=='\r'||ret=='\n'){   //Detect CR or LF.
+			if(i!=0){
+            	str[i]='\0';
+        	    //TODO : parse str and write data to program memory.
+				if(-1==parse_hex_format(str,&fmt)){
+					printf("ERROR!!!!\r\n");
+					return 0;
+				}
+				map_hex_format(&fmt);
+			
+            	//Reset str
+            	str[0]='\0';
+            	i=0;
+			}
+        }else{
+			str[i]=ret;
+			i++;
+		}
+    }
 
 	show_memory();
 	return 0;
@@ -313,5 +344,3 @@ int main(void){
 }
 
 #endif 
-
-
