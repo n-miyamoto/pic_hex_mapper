@@ -172,6 +172,72 @@ void map_hex_format(const FORMAT *format){
 	}
 }
 
+/**
+ * process_each_line
+ * @param 
+ * @param processor
+ * @return 
+ */
+int process_each_line(FILE *file, void (processor)(char* )){
+    char ret;
+    char str[BUF] ="";
+    int i=0;
+    
+    while(1){
+		ret = fgetc(file);
+
+        if(ret == EOF){break;}
+        if(ret=='\r'||ret=='\n'){   //Detect CR or LF.
+			if(i!=0){
+            	str[i]='\0';
+
+                //Process strings
+                processor(str);
+			
+            	//Reset str
+            	str[0]='\0';
+            	i=0;
+			}
+        }else{
+			str[i]=ret;
+			i++;
+		}
+    }
+    return 0;
+}
+
+/**
+ * 
+ * @param str
+ */
+void parse_hex_and_map(char *str){
+    FORMAT fmt;
+    if(-1==parse_hex_format(str,&fmt)){
+        printf("ERROR!!!!\r\n");
+    }
+    map_hex_format(&fmt);
+}
+
+/**
+ * 
+ * @param str
+ */
+void print(char *str){
+    printf(" %s\r\n",str);
+}
+
+/**
+ * 
+ * @param str
+ */
+void verify(char *str){
+    FORMAT fmt;
+    if(-1==parse_hex_format(str,&fmt)){
+        printf("ERROR!!!!\r\n");
+    }
+    //TODO : Implement verify function.
+}
+
 
 #ifndef TEST
 int main(void){
@@ -186,47 +252,9 @@ int main(void){
 
 	FORMAT fmt;
 	erase_memory();
-	/*
-	while(fgets(str,256,fp)!=NULL){
-		//printf("%s",str);		
-		if(-1==parse_hex_format(str,&fmt)){
-			printf("ERROR!!!!\r\n");
-			return 0;
-		}
-		//printf("datalength:%d\r\n",fmt.data_length);
-		map_hex_format(&fmt);
-	}
-	*/
-	int ret;
-	int i=0;
 
-	while(1){
-#ifdef __XC16
-		ret = FILEIO_GetChar(&file);    //read char from file.
-#elif defined unix
-		ret = fgetc(fp);
-#endif
-
-        if(ret == EOF){break;}		//Detect EOF.
-        if(ret=='\r'||ret=='\n'){   //Detect CR or LF.
-			if(i!=0){
-            	str[i]='\0';
-        	    //TODO : parse str and write data to program memory.
-				if(-1==parse_hex_format(str,&fmt)){
-					printf("ERROR!!!!\r\n");
-					return 0;
-				}
-				map_hex_format(&fmt);
-			
-            	//Reset str
-            	str[0]='\0';
-            	i=0;
-			}
-        }else{
-			str[i]=ret;
-			i++;
-		}
-    }
+	//process_each_line(fp, print);
+	process_each_line(fp,parse_hex_and_map);
 
 	show_memory();
 	return 0;
