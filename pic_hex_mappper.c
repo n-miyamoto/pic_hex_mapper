@@ -1,5 +1,3 @@
-
-
 #include <stdio.h>
 #include <string.h>
 
@@ -7,9 +5,8 @@
 #include<stdlib.h>
 #endif
 
-
 #define FILENAME	"test.hex" 	//File name of hex file.
-#define BUF 		(10000)	
+#define BUF			(10000)	
 #define DATA_BUF	(0xFF)		//BUF_SIZE_	
 #define MEMORY_SIZE	(0xAC00)	//Memory size of PIC program memory.	
 
@@ -18,8 +15,7 @@
 unsigned char program_memory[MEMORY_SIZE];
 #endif
 
-
-//Defien intel hex format.
+//Define intel hex format.
 typedef struct intel_hex_format{
 	unsigned char 	status_code;
 	unsigned int 	data_length;
@@ -91,12 +87,8 @@ int parse_hex_format(const char *str, FORMAT *format ){
 	char hex_data[DATA_BUF+4];
 	
 	//NULL check	
-	if(format == NULL ){
-		return -1;
-	}
-	if(str==NULL){
-		return -1;
-	}
+	if(format == NULL ){return -1;}
+	if(str==NULL){return -1;}
 
 	//Read status code.
 	if(str[0]!=':'){	
@@ -127,6 +119,70 @@ int parse_hex_format(const char *str, FORMAT *format ){
 	format->check_sum = (unsigned char)0x10*char2hex(str[9+2*format->data_length])+char2hex(str[10+2*format->data_length]);
 	
 	return 0;
+}
+
+typedef union pic_program_memory{
+	unsigned long l_data;
+	unsigned char b_data[4];
+} PROG_MEM;
+
+typedef struct memory{
+	long address;
+	PROG_MEM data;
+} MEMORY;
+
+long extended_address_offset =0;
+int intel_hex2program_memory(FORMAT *fmt, MEMORY *mem, int max_memory_size){
+	//NULL check
+	if(fmt==NULL){
+		printf("Err: null1\r\n");
+		return -1;
+	}
+	if(mem==NULL){
+		printf("Err: null2\r\n");
+		return -1;
+	}
+
+	long base_addr = fmt->address_offset/2;
+	int memsize = fmt->data_length /4;
+
+	
+	int i=0;
+	switch(fmt->record_type){
+		case 0:
+			//Error check
+			if(fmt->address_offset%2!=0){
+				return -1;
+			}
+			if(fmt->data_length%4 != 0){
+				return -1;
+			}
+			//Read mem
+			for(i=0;i<memsize;i++){
+				mem->address = base_addr+2*i;
+				mem->data.b_data[0] = fmt->data[0+4*i];
+				mem->data.b_data[1] = fmt->data[1+4*i];
+				mem->data.b_data[2] = fmt->data[2+4*i];
+				mem->data.b_data[3] = fmt->data[3+4*i];
+				mem++;
+			}
+			break;
+		case 1:
+			//TODO : end of file.
+			break;
+		case 2:
+			break;
+		case 3:
+			break;
+		case 4:
+			//TODO : set extend linear address.
+			break;
+		case 5:
+			break;
+		default:
+			break;
+	}
+	return 0;	
 }
 
 
@@ -215,6 +271,18 @@ void parse_hex_and_map(char *str){
     if(-1==parse_hex_format(str,&fmt)){
         printf("ERROR!!!!\r\n");
     }
+	
+	int length = fmt.data_length/4;
+	MEMORY mem[BUF];
+	if(-1==intel_hex2program_memory(&fmt,mem,BUF)){
+		printf("Failed to convert hex->progmem\r\n ");
+	}
+	
+	int i=0;
+	for(i=0;i<length;i++){
+		printf(":%lx",mem[i].address);
+	}
+	//TODO
     map_hex_format(&fmt);
 }
 
@@ -257,6 +325,7 @@ int main(void){
 	process_each_line(fp,parse_hex_and_map);
 
 	show_memory();
+
 	return 0;
 }
 
@@ -351,6 +420,48 @@ int test_map_hex_format(void){
 	return 0;
 }
 
+int check_intel_hex2program_memory(FORMAT *fmt, MEMORY *answer, int length){
+	
+	MEMORY mem[BUF];
+	if(-1==intel_hex2program_memory(fmt,mem,BUF)){
+		printf("Failed to convert hex->progmem\r\n ");
+	}
+	int i=0;
+	for(i=0;i<length;i++){
+		if(mem[i].address != answer[i].address){return -1;}
+		if(mem[i].data.l_data !=answer[i].data.l_data){return -1;}
+	}	
+	
+	return 0;
+}
+
+int test_intel_hex2program_memory(void){
+
+	FORMAT fmt = {	':',	//status code
+					0x10,	//data length
+					0x00,	//address offset
+					0x00,	//type
+					{0x83,0x16,0x85,0x01,0x86,0x01,0x01,0x30,0x86,0x00,0x83,0x12,0x00,0x30,0x85,0x00},//data
+					0x49//check sum
+					};
+
+	MEMORY ans[4];
+	ans[0].address = 0x00;
+	ans[0].data.l_data = 0x01851683;
+	ans[1].address = 0x02;
+	ans[1].data.l_data = 0x30010186;
+	ans[2].address = 0x04;
+	ans[2].data.l_data = 0x12830086;	
+	ans[3].address = 0x06;
+	ans[3].data.l_data = 0x00853000;
+
+	if(check_intel_hex2program_memory(&fmt,ans,4)<0){
+		return -1;
+	}
+	
+	return 0;
+}
+
 //TEST CODE
 int main(void){
 	//Test char2hex function.
@@ -367,6 +478,13 @@ int main(void){
 
 	//Test map_hex_format function.
 	test_map_hex_format();
+
+	//Test 
+	if(test_intel_hex2program_memory()<0){
+		printf("Test interhex->prog_memory failed\r\n");
+	}else{
+		printf("Test interhex->prog_memory successed\r\n");
+	}
 
 	return 0;
 }
