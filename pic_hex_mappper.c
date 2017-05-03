@@ -12,7 +12,7 @@
 
 #define EMURATE_MEMORY			
 #ifdef EMURATE_MEMORY
-unsigned char program_memory[MEMORY_SIZE];
+unsigned long program_memory[MEMORY_SIZE];
 #endif
 
 //Define intel hex format.
@@ -191,15 +191,15 @@ int intel_hex2program_memory(FORMAT *fmt, MEMORY *mem, int max_memory_size){
 */
 void erase_memory(void){
 #ifdef EMURATE_MEMORY
-	memset(program_memory,0xFF,sizeof(program_memory));
+	memset(program_memory,0xFFFFFFFF,sizeof(program_memory));
 #endif 
 }	
-void write_memory(long address, unsigned char data){
+void write_memory(MEMORY *mem){
 #ifdef EMURATE_MEMORY
-	program_memory[address]=data;
+	program_memory[mem->address]=mem->data.l_data;
 #endif
 }
-unsigned char read_memory(long address){
+unsigned long read_memory(long address){
 #ifdef EMURATE_MEMORY
 	return program_memory[address];
 #endif 
@@ -208,11 +208,10 @@ unsigned char read_memory(long address){
 void show_memory(void){
 #ifdef  EMURATE_MEMORY
 	int i=0;
-	for(i=0;i<MEMORY_SIZE;i++){
-		if(i%0x20==0) printf("\r\n%04x :",i/0x20*0x20);
-		printf("%02x ",program_memory[i]);
+	for(i=0;i<0x3000;i++){
+		printf("addr:%x, data:%lx\r\n",i,program_memory[i]);
 	}
-#endif 
+#endif
 }
 
 /*
@@ -224,7 +223,7 @@ void map_hex_format(const FORMAT *format){
 	int i=0;
 	long offset= format->address_offset;
 	for(i=0;i<format->data_length;i++){
-		write_memory(offset+i,format->data[i]);
+		//write_memory(offset+i,format->data[i]);
 	}
 }
 
@@ -249,7 +248,7 @@ int process_each_line(FILE *file, void (processor)(char* )){
 
                 //Process strings
                 processor(str);
-			
+
             	//Reset str
             	str[0]='\0';
             	i=0;
@@ -280,10 +279,8 @@ void parse_hex_and_map(char *str){
 	
 	int i=0;
 	for(i=0;i<length;i++){
-		printf(":%lx",mem[i].address);
+		write_memory(&mem[i]);
 	}
-	//TODO
-    map_hex_format(&fmt);
 }
 
 /**
