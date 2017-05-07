@@ -3,16 +3,18 @@
 
 #ifdef unix
 #include<stdlib.h>
+#include<stdint.h>
 #endif
 
-#define FILENAME	"test.hex" 	//File name of hex file.
+//#define FILENAME	"test.hex" 	//File name of hex file.
+#define FILENAME 	"memory.hex"
 #define BUF			(10000)	
 #define DATA_BUF	(0xFF)		//BUF_SIZE_	
 #define MEMORY_SIZE	(0xAC00)	//Memory size of PIC program memory.	
 
 #define EMURATE_MEMORY			
 #ifdef EMURATE_MEMORY
-unsigned long program_memory[MEMORY_SIZE];
+unsigned int program_memory[MEMORY_SIZE];
 #endif
 
 //Define intel hex format.
@@ -24,6 +26,9 @@ typedef struct intel_hex_format{
 	unsigned char	data[DATA_BUF];
 	unsigned char 	check_sum;	
 } FORMAT;
+
+unsigned long extended_address_offset = 0;
+
 
 /*
 *	convert hex char to hex.
@@ -123,7 +128,9 @@ int parse_hex_format(const char *str, FORMAT *format ){
 
 typedef union pic_program_memory{
 	unsigned long l_data;
+	uint16_t i_data[2];
 	unsigned char b_data[4];
+
 } PROG_MEM;
 
 typedef struct memory{
@@ -131,7 +138,6 @@ typedef struct memory{
 	PROG_MEM data;
 } MEMORY;
 
-long extended_address_offset =0;
 int intel_hex2program_memory(FORMAT *fmt, MEMORY *mem, int max_memory_size){
 	//NULL check
 	if(fmt==NULL){
@@ -169,13 +175,15 @@ int intel_hex2program_memory(FORMAT *fmt, MEMORY *mem, int max_memory_size){
 			break;
 		case 1:
 			//TODO : end of file.
+			printf("End hex file\r\n");
 			break;
 		case 2:
 			break;
 		case 3:
 			break;
 		case 4:
-			//TODO : set extend linear address.
+			extended_address_offset = fmt->data[0]*0x10+fmt->data[1];
+			printf("Ex addres setting %ld\r\n",extended_address_offset);
 			break;
 		case 5:
 			break;
@@ -189,42 +197,67 @@ int intel_hex2program_memory(FORMAT *fmt, MEMORY *mem, int max_memory_size){
 /*
 * 	memory handler.
 */
+uint8_t buffer[0x100];
+unsigned long active_row_addr=0;
+
+
 void erase_memory(void){
 #ifdef EMURATE_MEMORY
-	memset(program_memory,0xFFFFFFFF,sizeof(program_memory));
+	memset(program_memory,0x00,sizeof(program_memory));
 #endif 
-}	
+}
+
 void write_memory(MEMORY *mem){
 #ifdef EMURATE_MEMORY
-	program_memory[mem->address]=mem->data.l_data;
+	
+	unsigned long address = extended_address_offset*0x8000 + mem->address;
+
+	if(0==(address%0x80)){
+		//Reset active_row_addr and refreshg buffer.
+		active_row_addr = address;
+		memset(buffer,0x00,0x100);
+	}
+
+	int index = (address - active_row_addr) / 2;
+	if (index >= 0x40)
+	{
+		printf("ERROR: invalid index \r\n");
+	}
+	
+	buffer[4*index + 0] = mem->data.b_data[0];
+	buffer[4*index + 1] = mem->data.b_data[1];
+	buffer[4*index + 2] = mem->data.b_data[2];
+	buffer[4*index + 3] = mem->data.b_data[3];
+
+	if(index==0x3F){
+		//TODO write 1 block to memory.
+		int i=0;
+		for(i=0;i<0x40;i++){
+			program_memory[active_row_addr+2*i  ] = 0x100*buffer[4*i+3]+buffer[4*i+2];
+			program_memory[active_row_addr+2*i+1] = 0x100*buffer[4*i+1]+buffer[4*i+0];
+		}
+	}
 #endif
 }
+
 unsigned long read_memory(long address){
 #ifdef EMURATE_MEMORY
 	return program_memory[address];
 #endif 
 	return 0;
 }
+
 void show_memory(void){
 #ifdef  EMURATE_MEMORY
 	int i=0;
-	for(i=0;i<0x3000;i++){
-		printf("addr:%x, data:%lx\r\n",i,program_memory[i]);
+	for(i=0;i<0x6C00;i++){
+		if(0==(i%0x10)){
+			printf("\r\naddr %x :",i);
+		}
+		printf("%04x ",program_memory[i]);
 	}
+	printf("\r\n");
 #endif
-}
-
-/*
-*	map_hex_format
-*	
-*	Read hex format and map the data to progmemory.
-*/
-void map_hex_format(const FORMAT *format){
-	int i=0;
-	long offset= format->address_offset;
-	for(i=0;i<format->data_length;i++){
-		//write_memory(offset+i,format->data[i]);
-	}
 }
 
 /**
@@ -265,18 +298,21 @@ int process_each_line(FILE *file, void (processor)(char* )){
  * 
  * @param str
  */
-void parse_hex_and_map(char *str){
-    FORMAT fmt;
+void parse_hex_and_map(char*str){
+	//Parse HEX format to FORMAT structure.
+	FORMAT fmt;
     if(-1==parse_hex_format(str,&fmt)){
         printf("ERROR!!!!\r\n");
     }
 	
+	//Convert HEX format to address:data format.
 	int length = fmt.data_length/4;
 	MEMORY mem[BUF];
 	if(-1==intel_hex2program_memory(&fmt,mem,BUF)){
 		printf("Failed to convert hex->progmem\r\n ");
 	}
-	
+
+	//write memory.
 	int i=0;
 	for(i=0;i<length;i++){
 		write_memory(&mem[i]);
@@ -302,6 +338,7 @@ void verify(char *str){
     }
     //TODO : Implement verify function.
 }
+
 
 
 #ifndef TEST
